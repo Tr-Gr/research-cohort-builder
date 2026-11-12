@@ -1,0 +1,736 @@
+{
+ "datasets": [
+  {
+   "name": "ds_kpi",
+   "displayName": "KPIs",
+   "queryLines": [
+    "SELECT (SELECT count(*) FROM rs_af_t2d_deid) AS cohort_persons, ",
+    "(SELECT count(*) FROM rs_qa_results_t2d WHERE status = 'PASS') AS pass_n, ",
+    "(SELECT count(*) FROM rs_qa_results_t2d WHERE status = 'WARN') AS warn_n, ",
+    "(SELECT count(*) FROM rs_qa_results_t2d WHERE status = 'FAIL') AS fail_n, ",
+    "(SELECT round(avg(age_at_index), 1) FROM rs_cohort_t2d) AS mean_age_at_index"
+   ]
+  },
+  {
+   "name": "ds_attrition",
+   "displayName": "Attrition",
+   "queryLines": [
+    "SELECT CASE step_order WHEN 0 THEN '0 All patients' WHEN 1 THEN '1 Qualifying dx' WHEN 2 THEN '2 Age 18+' ",
+    "WHEN 3 THEN '3 Prior encounter' WHEN 4 THEN '4 Exclusions' WHEN 5 THEN '5 MRN list' END AS step_label, ",
+    "n_persons, n_removed FROM rs_attrition_t2d WHERE step_order <= 5 ORDER BY step_order"
+   ]
+  },
+  {
+   "name": "ds_demo",
+   "displayName": "Demographics",
+   "queryLines": [
+    "SELECT dimension, level, n_persons_display, CASE WHEN small_cell_flag THEN NULL ELSE n_persons END AS n_plot ",
+    "FROM rs_qa_distribution_t2d WHERE dimension IN ('gender', 'race', 'ethnicity', 'insurance_payer') ORDER BY dimension, level"
+   ]
+  },
+  {
+   "name": "ds_age",
+   "displayName": "Age bands",
+   "queryLines": [
+    "SELECT level AS age_band, CASE WHEN small_cell_flag THEN NULL ELSE n_persons END AS n_plot ",
+    "FROM rs_qa_distribution_t2d WHERE dimension = 'age_band' ORDER BY level"
+   ]
+  },
+  {
+   "name": "ds_a1c",
+   "displayName": "HbA1c distribution",
+   "queryLines": [
+    "SELECT 'Baseline' AS measure, format_number(floor(a1c_baseline * 4) / 4, 2) AS a1c_bin, count(*) AS n_persons ",
+    "FROM rs_af_t2d_deid WHERE a1c_baseline IS NOT NULL GROUP BY 1, 2 HAVING count(*) >= 11 ",
+    "UNION ALL ",
+    "SELECT 'Follow-up 6-12 mo', format_number(floor(a1c_followup * 4) / 4, 2), count(*) ",
+    "FROM rs_af_t2d_deid WHERE a1c_followup IS NOT NULL GROUP BY 1, 2 HAVING count(*) >= 11 ORDER BY 1, 2"
+   ]
+  },
+  {
+   "name": "ds_util",
+   "displayName": "Utilization",
+   "queryLines": [
+    "SELECT 'ED visits' AS measure, round(avg(ed_visits_12m), 2) AS mean_per_person FROM rs_af_t2d_deid ",
+    "UNION ALL SELECT 'Inpatient admissions', round(avg(inpatient_admissions_12m), 2) FROM rs_af_t2d_deid ",
+    "UNION ALL SELECT 'Outpatient visits', round(avg(outpatient_visits_12m), 2) FROM rs_af_t2d_deid"
+   ]
+  },
+  {
+   "name": "ds_qa",
+   "displayName": "QA checks",
+   "queryLines": [
+    "SELECT stage, check_id, check_name, status, detail FROM rs_qa_results_t2d ORDER BY stage, check_id"
+   ]
+  },
+  {
+   "name": "ds_small",
+   "displayName": "Small cells",
+   "queryLines": [
+    "SELECT dimension, level, n_persons_display FROM rs_qa_distribution_t2d WHERE small_cell_flag ORDER BY dimension, level"
+   ]
+  }
+ ],
+ "pages": [
+  {
+   "name": "rs_qa",
+   "displayName": "Research Cohort QA",
+   "pageType": "PAGE_TYPE_CANVAS",
+   "layoutVersion": "GRID_V1",
+   "layout": [
+    {
+     "widget": {
+      "name": "rs_title",
+      "multilineTextboxSpec": {
+       "lines": [
+        "## Research Cohort QA: study t2d"
+       ]
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 0,
+      "width": 12,
+      "height": 1
+     }
+    },
+    {
+     "widget": {
+      "name": "rs_subtitle",
+      "multilineTextboxSpec": {
+       "lines": [
+        "Attrition, QA results and the de-identified analytic file for one study. Cells under 11 show as <11 and are not plotted. No MRN or date of birth is queried on this page."
+       ]
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 1,
+      "width": 12,
+      "height": 2
+     }
+    },
+    {
+     "widget": {
+      "name": "k_cohort",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_kpi",
+         "fields": [
+          {
+           "name": "sum(cohort_persons)",
+           "expression": "SUM(`cohort_persons`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "frame": {
+        "showTitle": true,
+        "title": "Persons in cohort"
+       },
+       "encodings": {
+        "value": {
+         "fieldName": "sum(cohort_persons)",
+         "displayName": "Persons in cohort",
+         "format": {
+          "type": "number-plain",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 0
+          }
+         }
+        }
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 3,
+      "width": 3,
+      "height": 3
+     }
+    },
+    {
+     "widget": {
+      "name": "k_pass",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_kpi",
+         "fields": [
+          {
+           "name": "sum(pass_n)",
+           "expression": "SUM(`pass_n`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "frame": {
+        "showTitle": true,
+        "title": "QA PASS"
+       },
+       "encodings": {
+        "value": {
+         "fieldName": "sum(pass_n)",
+         "displayName": "QA PASS",
+         "format": {
+          "type": "number-plain",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 0
+          }
+         }
+        }
+       }
+      }
+     },
+     "position": {
+      "x": 3,
+      "y": 3,
+      "width": 3,
+      "height": 3
+     }
+    },
+    {
+     "widget": {
+      "name": "k_warn",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_kpi",
+         "fields": [
+          {
+           "name": "sum(warn_n)",
+           "expression": "SUM(`warn_n`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "frame": {
+        "showTitle": true,
+        "title": "QA WARN"
+       },
+       "encodings": {
+        "value": {
+         "fieldName": "sum(warn_n)",
+         "displayName": "QA WARN",
+         "format": {
+          "type": "number-plain",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 0
+          }
+         }
+        }
+       }
+      }
+     },
+     "position": {
+      "x": 6,
+      "y": 3,
+      "width": 3,
+      "height": 3
+     }
+    },
+    {
+     "widget": {
+      "name": "k_fail",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_kpi",
+         "fields": [
+          {
+           "name": "sum(fail_n)",
+           "expression": "SUM(`fail_n`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "frame": {
+        "showTitle": true,
+        "title": "QA FAIL"
+       },
+       "encodings": {
+        "value": {
+         "fieldName": "sum(fail_n)",
+         "displayName": "QA FAIL",
+         "format": {
+          "type": "number-plain",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 0
+          }
+         }
+        }
+       }
+      }
+     },
+     "position": {
+      "x": 9,
+      "y": 3,
+      "width": 3,
+      "height": 3
+     }
+    },
+    {
+     "widget": {
+      "name": "w_attr",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_attrition",
+         "fields": [
+          {
+           "name": "step_label",
+           "expression": "`step_label`"
+          },
+          {
+           "name": "sum(n_persons)",
+           "expression": "SUM(`n_persons`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "bar",
+       "frame": {
+        "showTitle": true,
+        "title": "Attrition funnel (persons)"
+       },
+       "encodings": {
+        "x": {
+         "fieldName": "step_label",
+         "scale": {
+          "type": "categorical"
+         },
+         "axis": {
+          "title": "Step"
+         }
+        },
+        "y": {
+         "fieldName": "sum(n_persons)",
+         "scale": {
+          "type": "quantitative"
+         },
+         "axis": {
+          "title": "Persons"
+         }
+        }
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 6,
+      "width": 6,
+      "height": 6
+     }
+    },
+    {
+     "widget": {
+      "name": "w_age",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_age",
+         "fields": [
+          {
+           "name": "age_band",
+           "expression": "`age_band`"
+          },
+          {
+           "name": "sum(n_plot)",
+           "expression": "SUM(`n_plot`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "bar",
+       "frame": {
+        "showTitle": true,
+        "title": "Age band at index (cells under 11 not plotted)"
+       },
+       "encodings": {
+        "x": {
+         "fieldName": "age_band",
+         "scale": {
+          "type": "categorical"
+         },
+         "axis": {
+          "title": "Age band"
+         }
+        },
+        "y": {
+         "fieldName": "sum(n_plot)",
+         "scale": {
+          "type": "quantitative"
+         },
+         "axis": {
+          "title": "Persons"
+         }
+        }
+       }
+      }
+     },
+     "position": {
+      "x": 6,
+      "y": 6,
+      "width": 6,
+      "height": 6
+     }
+    },
+    {
+     "widget": {
+      "name": "w_demo",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_demo",
+         "fields": [
+          {
+           "name": "dimension",
+           "expression": "`dimension`"
+          },
+          {
+           "name": "level",
+           "expression": "`level`"
+          },
+          {
+           "name": "n_persons_display",
+           "expression": "`n_persons_display`"
+          }
+         ],
+         "disaggregated": true
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "table",
+       "frame": {
+        "showTitle": true,
+        "title": "Demographics (small cells shown as <11)"
+       },
+       "encodings": {
+        "columns": [
+         {
+          "fieldName": "dimension",
+          "displayName": "Dimension"
+         },
+         {
+          "fieldName": "level",
+          "displayName": "Level"
+         },
+         {
+          "fieldName": "n_persons_display",
+          "displayName": "Persons"
+         }
+        ]
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 12,
+      "width": 6,
+      "height": 7
+     }
+    },
+    {
+     "widget": {
+      "name": "w_a1c",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_a1c",
+         "fields": [
+          {
+           "name": "a1c_bin",
+           "expression": "`a1c_bin`"
+          },
+          {
+           "name": "measure",
+           "expression": "`measure`"
+          },
+          {
+           "name": "sum(n_persons)",
+           "expression": "SUM(`n_persons`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "bar",
+       "frame": {
+        "showTitle": true,
+        "title": "HbA1c distribution (cells under 11 suppressed)"
+       },
+       "encodings": {
+        "x": {
+         "fieldName": "a1c_bin",
+         "scale": {
+          "type": "categorical"
+         },
+         "axis": {
+          "title": "HbA1c % (quarter-point bin)"
+         }
+        },
+        "y": {
+         "fieldName": "sum(n_persons)",
+         "scale": {
+          "type": "quantitative"
+         },
+         "axis": {
+          "title": "Persons"
+         }
+        },
+        "color": {
+         "fieldName": "measure",
+         "scale": {
+          "type": "categorical"
+         }
+        }
+       }
+      }
+     },
+     "position": {
+      "x": 6,
+      "y": 12,
+      "width": 6,
+      "height": 7
+     }
+    },
+    {
+     "widget": {
+      "name": "w_qa",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_qa",
+         "fields": [
+          {
+           "name": "stage",
+           "expression": "`stage`"
+          },
+          {
+           "name": "check_id",
+           "expression": "`check_id`"
+          },
+          {
+           "name": "check_name",
+           "expression": "`check_name`"
+          },
+          {
+           "name": "status",
+           "expression": "`status`"
+          },
+          {
+           "name": "detail",
+           "expression": "`detail`"
+          }
+         ],
+         "disaggregated": true
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "table",
+       "frame": {
+        "showTitle": true,
+        "title": "Automated QA checks (rules in notebook 02 and 03)"
+       },
+       "encodings": {
+        "columns": [
+         {
+          "fieldName": "stage",
+          "displayName": "Stage"
+         },
+         {
+          "fieldName": "check_id",
+          "displayName": "ID"
+         },
+         {
+          "fieldName": "check_name",
+          "displayName": "Check"
+         },
+         {
+          "fieldName": "status",
+          "displayName": "Status"
+         },
+         {
+          "fieldName": "detail",
+          "displayName": "Detail"
+         }
+        ]
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 19,
+      "width": 12,
+      "height": 9
+     }
+    },
+    {
+     "widget": {
+      "name": "w_util",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_util",
+         "fields": [
+          {
+           "name": "measure",
+           "expression": "`measure`"
+          },
+          {
+           "name": "sum(mean_per_person)",
+           "expression": "SUM(`mean_per_person`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "bar",
+       "frame": {
+        "showTitle": true,
+        "title": "Mean 12-month utilization per person (de-identified file)"
+       },
+       "encodings": {
+        "x": {
+         "fieldName": "measure",
+         "scale": {
+          "type": "categorical"
+         },
+         "axis": {
+          "title": "Visit type"
+         }
+        },
+        "y": {
+         "fieldName": "sum(mean_per_person)",
+         "scale": {
+          "type": "quantitative"
+         },
+         "axis": {
+          "title": "Mean per person"
+         }
+        }
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 28,
+      "width": 6,
+      "height": 5
+     }
+    },
+    {
+     "widget": {
+      "name": "w_small",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_small",
+         "fields": [
+          {
+           "name": "dimension",
+           "expression": "`dimension`"
+          },
+          {
+           "name": "level",
+           "expression": "`level`"
+          },
+          {
+           "name": "n_persons_display",
+           "expression": "`n_persons_display`"
+          }
+         ],
+         "disaggregated": true
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "table",
+       "frame": {
+        "showTitle": true,
+        "title": "Small-cell flags (suppressed in outputs)"
+       },
+       "encodings": {
+        "columns": [
+         {
+          "fieldName": "dimension",
+          "displayName": "Dimension"
+         },
+         {
+          "fieldName": "level",
+          "displayName": "Stratum"
+         },
+         {
+          "fieldName": "n_persons_display",
+          "displayName": "Persons"
+         }
+        ]
+       }
+      }
+     },
+     "position": {
+      "x": 6,
+      "y": 28,
+      "width": 6,
+      "height": 5
+     }
+    }
+   ]
+  }
+ ]
+}

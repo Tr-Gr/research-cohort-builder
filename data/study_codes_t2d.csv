@@ -1,0 +1,11 @@
+study_id,code_type,code_value,description
+t2d_2026,ICD10CM,E11.9,Type 2 diabetes mellitus without complications
+t2d_2026,ICD10CM,E11.22,Type 2 diabetes mellitus with diabetic chronic kidney disease
+t2d_2026,ICD10CM,E11.319,Type 2 diabetes with unspecified diabetic retinopathy
+t2d_2026,ICD10CM,E11.40,"Type 2 diabetes mellitus with diabetic neuropathy, unspecified"
+t2d_2026,ICD10CM,E11.65,Type 2 diabetes mellitus with hyperglycemia
+t2d_2026,ICD10CM,E11.21,Type 2 diabetes with diabetic nephropathy (no hits in this extract)
+t2d_2026,ICD10CM,E11.42,Type 2 diabetes with diabetic polyneuropathy (no hits in this extract)
+t2d_2026,NDC,99001-1444-01,"Metformin 500 mg, 30 tablets"
+t2d_2026,NDC,99002-1557-02,"Metformin 1000 mg, 90 tablets"
+t2d_2026,NDC,99001-1333-01,"Insulin glargine 3 mL pen, 5-pack"

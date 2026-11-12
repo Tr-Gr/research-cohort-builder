@@ -1,0 +1,89 @@
+resources:
+  jobs:
+    # One-time (and safe to re-run) setup: schema, volume, mask functions, optional sample data, policies.
+    research_setup:
+      name: Research Cohort Builder - setup
+      tags: {app: research-cohort-builder}
+      parameters:
+        - {name: catalog, default: "${var.catalog}"}
+        - {name: schema, default: "${var.schema}"}
+        - {name: table_prefix, default: "${var.table_prefix}"}
+        - {name: export_volume, default: "${var.export_volume}"}
+        - {name: approved_group, default: "${var.approved_group}"}
+        - {name: create_policies, default: "${var.create_policies}"}
+        - {name: create_sample_data, default: "${var.create_sample_data}"}
+        - {name: sample_patients, default: "${var.sample_patients}"}
+      environments:
+        - environment_key: rs
+          spec: {client: "2"}
+      tasks:
+        - task_key: setup
+          environment_key: rs
+          notebook_task: {notebook_path: ../src/00_setup.py}
+        - task_key: sample_data
+          depends_on: [{task_key: setup}]
+          environment_key: rs
+          notebook_task: {notebook_path: ../src/00_sample_data.py}
+        - task_key: governance
+          depends_on: [{task_key: sample_data}]
+          environment_key: rs
+          notebook_task: {notebook_path: ../src/00_governance.py}
+
+    # One run = one study. Change the parameters (study_id, code_table, windows, exclusions) for the next study.
+    research_study:
+      name: Research Cohort Builder - study
+      tags: {app: research-cohort-builder}
+      max_concurrent_runs: 5
+      parameters:
+        - {name: catalog, default: "${var.catalog}"}
+        - {name: schema, default: "${var.schema}"}
+        - {name: table_prefix, default: "${var.table_prefix}"}
+        - {name: study_id, default: t2d}
+        - {name: code_table, default: ""}
+        - {name: index_window_start, default: "2024-01-01"}
+        - {name: index_window_end, default: "2025-12-31"}
+        - {name: lookback_days, default: "365"}
+        - {name: exclusion_icd10_prefixes, default: "E10,N18.6"}
+        - {name: mrn_table, default: ""}
+        - {name: apply_mrn_restriction, default: "false"}
+        - {name: baseline_lookback_days, default: "365"}
+        - {name: a1c_baseline_window_days, default: "180"}
+        - {name: followup_days, default: "365"}
+        - {name: patients_table, default: "${var.patients_table}"}
+        - {name: encounters_table, default: "${var.encounters_table}"}
+        - {name: diagnoses_table, default: "${var.diagnoses_table}"}
+        - {name: medications_table, default: "${var.medications_table}"}
+        - {name: lab_results_table, default: "${var.lab_results_table}"}
+        - {name: ndc_crosswalk_table, default: "${var.ndc_crosswalk_table}"}
+        - {name: approved_group, default: "${var.approved_group}"}
+        - {name: export_volume, default: "${var.export_volume}"}
+        - {name: linkage_secret_scope, default: "${var.linkage_secret_scope}"}
+        - {name: linkage_secret_key, default: "${var.linkage_secret_key}"}
+        - {name: share_name, default: "${var.share_name}"}
+      environments:
+        - environment_key: rs
+          spec: {client: "2"}
+      tasks:
+        - task_key: build_study_cohort
+          environment_key: rs
+          notebook_task: {notebook_path: ../src/01_build_study_cohort.py}
+        - task_key: qa_checks
+          depends_on: [{task_key: build_study_cohort}]
+          environment_key: rs
+          notebook_task: {notebook_path: ../src/02_qa_checks.py}
+        - task_key: analytic_file
+          depends_on: [{task_key: qa_checks}]
+          environment_key: rs
+          notebook_task: {notebook_path: ../src/03_analytic_file.py}
+        - task_key: share
+          depends_on: [{task_key: analytic_file}]
+          environment_key: rs
+          notebook_task: {notebook_path: ../src/04_share.py}
+
+  dashboards:
+    research_cohort_qa_dashboard:
+      display_name: Research Cohort QA
+      file_path: ../src/dashboards/research_cohort_qa.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+      dataset_catalog: ${var.catalog}
+      dataset_schema: ${var.schema}

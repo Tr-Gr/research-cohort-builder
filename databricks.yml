@@ -1,0 +1,97 @@
+# Research Cohort Builder: code list in, governed cohort, QA gate, de-identified analytic file and share out.
+# Deploy:   databricks bundle deploy -t dev
+# Set up:   databricks bundle run -t dev research_setup
+# Run:      databricks bundle run -t dev research_study   (or --params study_id=...,code_table=...)
+bundle:
+  name: research-cohort-builder
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog (must already exist)
+  schema:
+    description: Schema for code lists, cohorts, QA results and analytic files (created if missing)
+    default: research
+  table_prefix:
+    description: Prefix for every table, view, function and policy the framework creates (the dashboard expects the default)
+    default: rs_
+  warehouse_id:
+    description: SQL warehouse for the QA dashboard
+  approved_group:
+    description: Account-level group that may see identified values (MRN, date of birth). Everyone else sees masks.
+    default: ""
+  create_policies:
+    description: Create the ABAC column-mask policies on the schema (needs approved_group and MANAGE on the schema)
+    default: "true"
+  create_sample_data:
+    description: Create synthetic source tables, a sample code list, an NDC crosswalk and an MRN list
+    default: "true"
+  sample_patients:
+    description: Number of synthetic patients
+    default: 20000
+  export_volume:
+    description: Volume (created if missing) that receives the de-identified CSV and Parquet exports
+    default: research_files
+  # Source tables. Leave empty to use the synthetic sample tables. See README for the expected columns.
+  patients_table:
+    default: ""
+  encounters_table:
+    default: ""
+  diagnoses_table:
+    default: ""
+  medications_table:
+    default: ""
+  lab_results_table:
+    default: ""
+  ndc_crosswalk_table:
+    default: ""
+  linkage_secret_scope:
+    description: Secret scope holding the linkage token key (empty = demo-only key, never use for real data)
+    default: ""
+  linkage_secret_key:
+    default: linkage_salt
+  share_name:
+    description: OpenSharing share for the de-identified file (empty = no share)
+    default: ""
+  service_principal_application_id:
+    description: Application ID of the service principal that runs staging and prod
+    default: ""
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://<your-dev-workspace>.azuredatabricks.net
+    variables:
+      catalog: <dev_catalog>
+      warehouse_id: <dev_warehouse_id>
+
+  staging:
+    mode: production
+    workspace:
+      host: https://<your-nonprod-workspace>.azuredatabricks.net
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    run_as:
+      service_principal_name: ${var.service_principal_application_id}
+    variables:
+      catalog: <staging_catalog>
+      warehouse_id: <staging_warehouse_id>
+      approved_group: <approved_research_group>
+      create_sample_data: "false"
+
+  prod:
+    mode: production
+    workspace:
+      host: https://<your-prod-workspace>.azuredatabricks.net
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    run_as:
+      service_principal_name: ${var.service_principal_application_id}
+    variables:
+      catalog: <prod_catalog>
+      warehouse_id: <prod_warehouse_id>
+      approved_group: <approved_research_group>
+      create_sample_data: "false"
+      linkage_secret_scope: <secret_scope>
